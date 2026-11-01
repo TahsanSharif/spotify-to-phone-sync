@@ -1,29 +1,13 @@
-# Local configuration and secrets
-config.json
-.env
-.env.*
-*.spotdl
-
-# Local audio, logs and runtime files
-Music/
-downloads/
-logs/
-*.log
-*.tmp
-
-# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
 .venv/
 venv/
-build/
-dist/
-.pytest_cache/
-.coverage
-
-# Editors / OS
-.vscode/
-.idea/
+.env
+.env.*
+config.json
+logs/
+*.log
 .DS_Store
 Thumbs.db
