@@ -2,9 +2,9 @@
 
 A Windows-first project for keeping a local MP3 library and safely syncing music to Android smartphones over USB using Media Transfer Protocol (MTP).
 
-## Android device detection (read-only milestone)
+## Android device detection and folder inspection (read-only)
 
-The first Android feature lists MTP devices visible to Windows and the storage roots exposed by each device. It does not browse personal files, upload music, create folders, or delete anything on the phone.
+The Android commands can list MTP devices and inspect a selected folder. They do not upload music, create folders, modify files, or delete anything on the phone.
 
 ### Requirements
 
@@ -33,19 +33,23 @@ Connect and unlock the phone, select **File transfer**, then run:
 playlist2phone-devices
 ~~~
 
-Or:
+This command reports device names and storage-root names only.
+
+### Inspect the target folder
+
+Use the exact device and storage names reported by the device command. For example:
 
 ~~~powershell
-py -m playlist2phone.android
+playlist2phone-inspect --device "Tauhida's A23" --storage "Internal storage" --path "Music/Proplaylist"
 ~~~
 
-This command is read-only. It reports device names and storage-root names only. Windows may show other portable MTP devices too; the output is not a cryptographic verification that a listed device is an Android phone.
+The inspection is read-only. It reports whether the requested folder exists and counts MP3 files, subfolders, and other files directly inside it. It does not list private filenames or inspect nested folders. If the folder does not exist, the command only reports that; it does not create it.
 
 If no device appears, try another USB data cable/port, unlock the phone, select **File transfer (MTP)**, and run the command again.
 
 ## Existing local-folder copy utility
 
-The project also contains a generic preview-first MP3 folder-copy engine. This is for ordinary filesystem paths and removable folders; **it does not yet copy directly to Android MTP storage**.
+The project also contains a generic preview-first MP3 folder-copy engine. This is for ordinary filesystem paths and removable folders; it does not yet copy directly to Android MTP storage.
 
 Preview:
 
@@ -60,7 +64,7 @@ New-Item -ItemType File -Path "E:\\Music\\.playlist2phone-target"
 playlist2phone --source "C:\\Music\\Master" --destination "E:\\Music" --apply
 ~~~
 
-The folder-copy utility copies new MP3s, skips identical files using SHA-256, updates changed files, and never deletes destination files. Android MTP transfer will be implemented separately after device detection is tested with a real phone.
+The folder-copy utility copies new MP3s, skips identical files using SHA-256, updates changed files, and never deletes destination files. Android MTP transfer will be implemented separately after read-only inspection is tested with a real phone.
 
 ## Run tests
 
@@ -68,12 +72,12 @@ The folder-copy utility copies new MP3s, skips identical files using SHA-256, up
 py -m unittest discover -s tests -v
 ~~~
 
-The MTP discovery tests use a fake backend and do not require a physical Android phone. Real device detection still needs to be verified on Windows with an actual phone.
+The MTP tests use a fake backend and do not require a physical Android phone. Real device detection and folder inspection still need to be verified on Windows with an actual phone.
 
 ## Planned workflow
 
-1. Detect an Android phone over USB/MTP. (Read-only prototype.)
-2. Identify its available storage and let the user select a Music destination.
+1. Detect an Android phone over USB/MTP.
+2. Inspect its available storage and the selected Music destination (read-only prototype).
 3. Preview which MP3s are new, changed, or already identical.
 4. Copy only approved changes to the phone.
 5. Handle disconnect/reconnect safely; never delete phone files automatically.
@@ -82,7 +86,7 @@ The MTP discovery tests use a fake backend and do not require a physical Android
 ## Safety and privacy
 
 - The computer's master music folder is the source of truth.
-- The Android detection command only reads device and storage names.
+- The Android detection and folder-inspection commands only read device metadata and folder contents.
 - Device files must never be automatically deleted.
 - Never commit credentials, personal playlist URLs, local paths, logs, or private playlist data.
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "playlist2phone"
-version = "0.2.2"
+version = "0.3.0"
 description = "Preview-first music sync for Android phones over USB MTP"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,6 +17,7 @@ android = ["comtypes>=1.4.11"]
 [project.scripts]
 playlist2phone = "playlist2phone.cli:main"
 playlist2phone-devices = "playlist2phone.android:main"
+playlist2phone-inspect = "playlist2phone.android:inspect_main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
