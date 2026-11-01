@@ -434,7 +434,7 @@ def transfer_new_mtp_files(source, device_name, storage_name, relative_path, *, 
     except AndroidDetectionError:
         raise
     except Exception as exc:
-        raise AndroidDetectionError("MTP transfer stopped due to a device error. Reconnect and run preview again.") from exc
+        raise AndroidDetectionError(f"MTP transfer stopped due to a device error: {type(exc).__name__}: {exc}") from exc
     finally:
         for device in devices:
             try:
