@@ -1,0 +1,7 @@
+{
+  "library_directory": "./Music",
+  "phone_directory": "D:/Music/Playlist2Phone",
+  "target_marker_filename": ".playlist2phone-target",
+  "target_marker_contents": "playlist2phone-target-v1",
+  "file_extensions": [".mp3"]
+}
