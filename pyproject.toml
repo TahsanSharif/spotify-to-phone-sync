@@ -4,14 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "playlist2phone"
-version = "0.2.0"
+version = "0.2.1"
 description = "Preview-first music sync for Android phones over USB MTP"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-android = ["mtp==2.0.9"]
+# Pin the upstream source commit: the configured package index only exposes
+# older mtp releases, while the required 2.0.9 source is available on GitHub.
+android = [
+    "mtp @ git+https://github.com/Heribert17/mtp.git@9d05c1e9495d1c7614f3af1b42eae28c66742fa8"
+]
 
 [project.scripts]
 playlist2phone = "playlist2phone.cli:main"

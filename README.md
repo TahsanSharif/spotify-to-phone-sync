@@ -9,7 +9,8 @@ The first Android feature lists MTP devices visible to Windows and the storage r
 ### Requirements
 
 - Windows 10 or Windows 11
-- Python 3.10 or newer
+- Python 3.10 or newer (the upstream MTP library currently documents testing with Python 3.12+)
+- Git installed and available on PATH
 - An Android phone connected by a USB data cable
 - The phone unlocked, with **File transfer (MTP)** selected in its USB options
 
@@ -23,7 +24,7 @@ py -3.13 -m venv .venv
 py -m pip install -e ".[android]"
 ~~~
 
-The optional Android extra installs mtp 2.0.9, a separate MIT-licensed package that wraps Windows Portable Devices (WPD) for MTP access. See https://github.com/Heribert17/mtp.
+The Android extra installs the upstream mtp 2.0.9 source from a pinned GitHub commit, plus its Windows dependency. This avoids relying on older mtp releases visible on some Python package indexes. The upstream project is MIT-licensed: https://github.com/Heribert17/mtp.
 
 ### List connected MTP devices
 
