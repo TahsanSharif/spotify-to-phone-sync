@@ -9,8 +9,7 @@ The first Android feature lists MTP devices visible to Windows and the storage r
 ### Requirements
 
 - Windows 10 or Windows 11
-- Python 3.10 or newer (the upstream MTP library currently documents testing with Python 3.12+)
-- Git installed and available on PATH
+- Python 3.10 or newer (the upstream MTP library documents testing with Python 3.12+)
 - An Android phone connected by a USB data cable
 - The phone unlocked, with **File transfer (MTP)** selected in its USB options
 
@@ -20,11 +19,11 @@ From the repository root, in PowerShell:
 
 ~~~powershell
 py -3.13 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\\.venv\\Scripts\\Activate.ps1
 py -m pip install -e ".[android]"
 ~~~
 
-The Android extra installs the upstream mtp 2.0.9 source from a pinned GitHub commit, plus its Windows dependency. This avoids relying on older mtp releases visible on some Python package indexes. The upstream project is MIT-licensed: https://github.com/Heribert17/mtp.
+The Android extra installs `comtypes`. The Windows MTP adapter used by this milestone is included under `src/mtp` from the MIT-licensed upstream project [Heribert17/mtp](https://github.com/Heribert17/mtp), pinned to commit `9d05c1e9495d1c7614f3af1b42eae28c66742fa8`. Its MIT license is included at `THIRD_PARTY_LICENSES/mtp-MIT.txt`. This avoids the upstream repository's current packaging-layout error during pip installation.
 
 ### List connected MTP devices
 
@@ -51,14 +50,14 @@ The project also contains a generic preview-first MP3 folder-copy engine. This i
 Preview:
 
 ~~~powershell
-playlist2phone --source "C:\Music\Master" --destination "E:\Music"
+playlist2phone --source "C:\\Music\\Master" --destination "E:\\Music"
 ~~~
 
 Apply only after creating the marker file in the exact destination folder:
 
 ~~~powershell
-New-Item -ItemType File -Path "E:\Music\.playlist2phone-target"
-playlist2phone --source "C:\Music\Master" --destination "E:\Music" --apply
+New-Item -ItemType File -Path "E:\\Music\\.playlist2phone-target"
+playlist2phone --source "C:\\Music\\Master" --destination "E:\\Music" --apply
 ~~~
 
 The folder-copy utility copies new MP3s, skips identical files using SHA-256, updates changed files, and never deletes destination files. Android MTP transfer will be implemented separately after device detection is tested with a real phone.
