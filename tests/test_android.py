@@ -7,6 +7,7 @@ from playlist2phone.android import (
     discover_mtp_devices,
     inspect_mtp_folder,
     preview_mtp_sync,
+    transfer_new_mtp_files,
 )
 
 
@@ -22,6 +23,18 @@ class FakeEntry:
 
     def get_children(self):
         return iter(self._children)
+
+    def create_content(self, name):
+        if self.get_child(name):
+            raise OSError("already exists")
+        folder = FakeEntry(name, 1)
+        self._children.append(folder)
+        return folder
+
+    def upload_file(self, name, source):
+        if self.get_child(name):
+            raise OSError("already exists")
+        self._children.append(FakeEntry(name, 2, size=Path(source).stat().st_size))
 
 
 class FakeDevice:
