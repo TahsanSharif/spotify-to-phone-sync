@@ -324,3 +324,148 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+@dataclass(frozen=True)
+class MTPTransferResult:
+    copied: tuple[str, ...]
+    skipped: tuple[str, ...]
+    conflicts: tuple[str, ...]
+    failed: tuple[str, ...]
+    created_folders: tuple[str, ...]
+
+
+def _ensure_mtp_folder(parent: Any, name: str) -> tuple[Any, bool]:
+    matches = [x for x in parent.get_children() if str(getattr(x, "name", "")).casefold() == name.casefold()]
+    if len(matches) > 1:
+        raise AndroidDetectionError(f"Multiple phone entries match '{name}'.")
+    if matches:
+        if getattr(matches[0], "content_type", -1) != 1:
+            raise AndroidDetectionError(f"Phone path component '{name}' is not a folder.")
+        return matches[0], False
+    return parent.create_content(name), True
+
+
+def transfer_new_mtp_files(source, device_name, storage_name, relative_path, *, backend=None, apply=False):
+    """Copy only missing MP3 paths. Dry-run by default; never overwrite or delete."""
+    root = Path(source)
+    local = _local_mp3_files(root)
+    if not apply:
+        items = preview_mtp_sync(root, device_name, storage_name, relative_path, backend=backend)
+        return MTPTransferResult((), tuple(x.relative_path for x in items if x.status == "SAME_SIZE_UNVERIFIED"),
+                                 tuple(x.relative_path for x in items if x.status == "SIZE_DIFFERS"), (), ())
+
+    target_parts = _validated_parts(relative_path)
+    mtp_backend = backend if backend is not None else _load_windows_mtp_backend()
+    try:
+        devices = mtp_backend.get_portable_devices()
+    except Exception as exc:
+        raise AndroidDetectionError("Windows could not enumerate MTP devices. Reconnect and unlock the phone.") from exc
+    copied, skipped, conflicts, failed, created = [], [], [], [], []
+    try:
+        matches = [d for d in devices if _device_label(d).casefold() == device_name.casefold()]
+        if len(matches) != 1:
+            raise AndroidDetectionError(f"Expected one device named '{device_name}', found {len(matches)}.")
+        storages = [s for s in matches[0].get_content() if str(getattr(s, "name", "")).casefold() == storage_name.casefold()]
+        if len(storages) != 1:
+            raise AndroidDetectionError(f"Expected one storage named '{storage_name}', found {len(storages)}.")
+        storage = storages[0]
+
+        target = storage
+        exists = True
+        for part in target_parts:
+            found = [x for x in target.get_children() if str(getattr(x, "name", "")).casefold() == part.casefold()]
+            if len(found) > 1:
+                raise AndroidDetectionError(f"Ambiguous phone folder component '{part}'.")
+            if not found:
+                exists = False
+                break
+            target = found[0]
+            if getattr(target, "content_type", -1) != 1:
+                raise AndroidDetectionError(f"Phone path component '{part}' is not a folder.")
+        remote = _remote_mp3_files(target) if exists else {}
+        remote_sizes = {name.casefold(): size for name, (_entry, size) in remote.items()}
+        pending = []
+        for relative, (local_file, size) in sorted(local.items(), key=lambda x: x[0].casefold()):
+            old_size = remote_sizes.get(relative.casefold())
+            if old_size is None:
+                pending.append((relative, local_file, size))
+            elif old_size == size:
+                skipped.append(relative)
+            else:
+                conflicts.append(relative)
+        if not pending:
+            return MTPTransferResult((), tuple(skipped), tuple(conflicts), (), ())
+
+        target = storage
+        for index, part in enumerate(target_parts):
+            target, made = _ensure_mtp_folder(target, part)
+            if made:
+                created.append("/".join(target_parts[:index + 1]))
+
+        for relative, local_file, expected_size in pending:
+            try:
+                parent = target
+                parent_parts = []
+                components = relative.split("/")
+                for component in components[:-1]:
+                    parent_parts.append(component)
+                    parent, made = _ensure_mtp_folder(parent, component)
+                    if made:
+                        created.append("/".join(target_parts + parent_parts))
+                filename = components[-1]
+                collision = [x for x in parent.get_children() if str(getattr(x, "name", "")).casefold() == filename.casefold()]
+                if collision:
+                    conflicts.append(relative)
+                    continue
+                if local_file.is_symlink() or not local_file.is_file() or local_file.stat().st_size != expected_size:
+                    failed.append(relative)
+                    continue
+                parent.upload_file(filename, str(local_file))
+                uploaded = parent.get_child(filename)
+                if uploaded is None or int(getattr(uploaded, "size", -1)) != expected_size:
+                    failed.append(relative)
+                else:
+                    copied.append(relative)
+            except Exception:
+                failed.append(relative)
+        return MTPTransferResult(tuple(copied), tuple(skipped), tuple(conflicts), tuple(failed), tuple(created))
+    except AndroidDetectionError:
+        raise
+    except Exception as exc:
+        raise AndroidDetectionError("MTP transfer stopped due to a device error. Reconnect and run preview again.") from exc
+    finally:
+        for device in devices:
+            try:
+                device.close()
+            except Exception:
+                pass
+
+
+def transfer_main(argv=None):
+    parser = argparse.ArgumentParser(prog="playlist2phone-android-transfer",
+        description="Copy missing MP3s to Android over USB/MTP. Dry-run by default; --apply is required to write.")
+    parser.add_argument("--source", required=True, help="Computer master MP3 folder")
+    parser.add_argument("--device", required=True)
+    parser.add_argument("--storage", required=True)
+    parser.add_argument("--path", required=True, help="Destination folder relative to storage")
+    parser.add_argument("--apply", action="store_true", help="Create missing folders and copy missing MP3s.")
+    args = parser.parse_args(argv)
+    try:
+        result = transfer_new_mtp_files(args.source, args.device, args.storage, args.path, apply=args.apply)
+    except (AndroidDetectionError, OSError) as exc:
+        print(f"Android transfer failed: {exc}", file=sys.stderr)
+        return 2
+    mode = "TRANSFER" if args.apply else "DRY RUN"
+    print(f"{mode}: copied {len(result.copied)}, skipped {len(result.skipped)}, conflicts {len(result.conflicts)}, failed {len(result.failed)}")
+    if result.created_folders:
+        print("Created folders:")
+        for name in result.created_folders:
+            print(f"  {name}")
+    for label, values in (("COPIED", result.copied), ("SKIPPED", result.skipped), ("CONFLICT", result.conflicts), ("FAILED", result.failed)):
+        for name in values:
+            print(f"{label:9} {name}")
+    print("Existing files are never overwritten; no phone files were deleted.")
+    if not args.apply:
+        print("Dry run only. Add --apply to copy missing files.")
+    return 1 if result.conflicts or result.failed else 0

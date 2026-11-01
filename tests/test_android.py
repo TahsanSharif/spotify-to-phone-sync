@@ -159,5 +159,39 @@ class AndroidDiscoveryTests(unittest.TestCase):
         self.assertTrue(device.closed)
 
 
+    def test_android_transfer_dry_run_does_not_create_folders(self):
+        device = FakeDevice("Phone", "", ["Internal storage"])
+        with tempfile.TemporaryDirectory() as temp:
+            Path(temp, "song.mp3").write_bytes(b"audio")
+            result = transfer_new_mtp_files(temp, "Phone", "Internal storage", "Music/Playlist", backend=FakeBackend([device]))
+        self.assertEqual(result.copied, ())
+        self.assertIsNone(device.roots["Internal storage"].get_child("Music"))
+
+    def test_android_apply_creates_folders_and_copies_new_file(self):
+        device = FakeDevice("Phone", "", ["Internal storage"])
+        with tempfile.TemporaryDirectory() as temp:
+            Path(temp, "song.mp3").write_bytes(b"audio-data")
+            result = transfer_new_mtp_files(temp, "Phone", "Internal storage", "Music/Playlist", backend=FakeBackend([device]), apply=True)
+        target = device.roots["Internal storage"].get_child("Music").get_child("Playlist")
+        self.assertEqual(target.get_child("song.mp3").size, 10)
+        self.assertEqual(result.copied, ("song.mp3",))
+        self.assertEqual(result.created_folders, ("Music", "Music/Playlist"))
+
+    def test_android_apply_skips_same_size_and_preserves_changed_file(self):
+        device = FakeDevice("Phone", "", ["Internal storage"])
+        music = device.roots["Internal storage"].create_content("Music")
+        target = music.create_content("Playlist")
+        target._children.extend([FakeEntry("same.mp3", size=4), FakeEntry("changed.mp3", size=1)])
+        with tempfile.TemporaryDirectory() as temp:
+            Path(temp, "same.mp3").write_bytes(b"1234")
+            Path(temp, "changed.mp3").write_bytes(b"longer")
+            Path(temp, "new.mp3").write_bytes(b"new")
+            result = transfer_new_mtp_files(temp, "Phone", "Internal storage", "Music/Playlist", backend=FakeBackend([device]), apply=True)
+        self.assertEqual(result.skipped, ("same.mp3",))
+        self.assertEqual(result.conflicts, ("changed.mp3",))
+        self.assertEqual(result.copied, ("new.mp3",))
+        self.assertEqual(target.get_child("changed.mp3").size, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
