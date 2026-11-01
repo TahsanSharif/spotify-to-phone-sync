@@ -1,17 +1,20 @@
-from types import SimpleNamespace
+import tempfile
 import unittest
+from pathlib import Path
 
 from playlist2phone.android import (
     AndroidDetectionError,
     discover_mtp_devices,
     inspect_mtp_folder,
+    preview_mtp_sync,
 )
 
 
 class FakeEntry:
-    def __init__(self, name, content_type=2, children=None):
+    def __init__(self, name, content_type=2, children=None, size=0):
         self.name = name
         self.content_type = content_type
+        self.size = size
         self._children = children or []
 
     def get_child(self, name):
@@ -31,9 +34,11 @@ class FakeDevice:
             storage_name: FakeEntry(storage_name, 0, [
                 FakeEntry("Music", 1, [
                     FakeEntry("Proplaylist", 1, [
-                        FakeEntry("song.mp3"),
+                        FakeEntry("song.mp3", size=10),
                         FakeEntry("cover.jpg"),
-                        FakeEntry("nested", 1),
+                        FakeEntry("nested", 1, [
+                            FakeEntry("inside.mp3", size=30)
+                        ]),
                     ])
                 ])
             ])
@@ -72,7 +77,6 @@ class AndroidDiscoveryTests(unittest.TestCase):
         class BrokenDevice(FakeDevice):
             def get_content(self):
                 raise OSError("device became unavailable")
-
         first = BrokenDevice("Example Android", "", [])
         second = FakeDevice("Another Android", "", ["Internal storage"])
         with self.assertRaises(AndroidDetectionError):
@@ -88,10 +92,7 @@ class AndroidDiscoveryTests(unittest.TestCase):
 
     def test_inspects_target_folder_counts_only_immediate_items(self):
         device = FakeDevice("Example Android", "", ["Internal storage"])
-        result = inspect_mtp_folder(
-            "Example Android", "Internal storage", "Music/Proplaylist",
-            backend=FakeBackend([device]),
-        )
+        result = inspect_mtp_folder("Example Android", "Internal storage", "Music/Proplaylist", backend=FakeBackend([device]))
         self.assertTrue(result.exists)
         self.assertEqual(result.mp3_count, 1)
         self.assertEqual(result.subfolder_count, 1)
@@ -100,28 +101,62 @@ class AndroidDiscoveryTests(unittest.TestCase):
 
     def test_reports_missing_folder_without_writing(self):
         device = FakeDevice("Example Android", "", ["Internal storage"])
-        result = inspect_mtp_folder(
-            "Example Android", "Internal storage", "Music/Missing",
-            backend=FakeBackend([device]),
-        )
+        result = inspect_mtp_folder("Example Android", "Internal storage", "Music/Missing", backend=FakeBackend([device]))
         self.assertFalse(result.exists)
         self.assertTrue(device.closed)
 
     def test_rejects_parent_traversal_and_absolute_paths(self):
-        device = FakeDevice("Example Android", "", ["Internal storage"])
-        backend = FakeBackend([device])
+        backend = FakeBackend([FakeDevice("Example Android", "", ["Internal storage"])])
         for path in ("../Music", "/Music", "C:/Music"):
             with self.subTest(path=path), self.assertRaises(AndroidDetectionError):
                 inspect_mtp_folder("Example Android", "Internal storage", path, backend=backend)
 
     def test_rejects_ambiguous_device_name(self):
-        devices = [
-            FakeDevice("Example Android", "", ["Internal storage"]),
-            FakeDevice("Example Android", "", ["Internal storage"]),
-        ]
+        devices = [FakeDevice("Example Android", "", ["Internal storage"]), FakeDevice("Example Android", "", ["Internal storage"])]
         with self.assertRaises(AndroidDetectionError):
             inspect_mtp_folder("Example Android", "Internal storage", "Music/Proplaylist", backend=FakeBackend(devices))
         self.assertTrue(all(device.closed for device in devices))
+
+    def test_preview_classifies_new_same_size_and_different_size(self):
+        device = FakeDevice("Example Android", "", ["Internal storage"])
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            (source / "song.mp3").write_bytes(b"1234567890")
+            (source / "new.mp3").write_bytes(b"new")
+            (source / "different.mp3").write_bytes(b"x" * 5)
+            target = device.roots["Internal storage"].get_child("Music").get_child("Proplaylist")
+            target._children.extend([
+                FakeEntry("different.mp3", size=7),
+            ])
+            items = preview_mtp_sync(source, "Example Android", "Internal storage", "Music/Proplaylist", backend=FakeBackend([device]))
+        states = {item.relative_path: item.status for item in items}
+        self.assertEqual(states["new.mp3"], "NEW")
+        self.assertEqual(states["song.mp3"], "SAME_SIZE_UNVERIFIED")
+        self.assertEqual(states["different.mp3"], "SIZE_DIFFERS")
+        self.assertTrue(device.closed)
+
+    def test_preview_recurses_into_phone_subfolders(self):
+        device = FakeDevice("Example Android", "", ["Internal storage"])
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            (source / "nested").mkdir()
+            (source / "nested" / "inside.mp3").write_bytes(b"x" * 30)
+            items = preview_mtp_sync(source, "Example Android", "Internal storage", "Music/Proplaylist", backend=FakeBackend([device]))
+        self.assertEqual(items[0].status, "SAME_SIZE_UNVERIFIED")
+
+    def test_preview_rejects_missing_source(self):
+        device = FakeDevice("Example Android", "", ["Internal storage"])
+        with self.assertRaises(AndroidDetectionError):
+            preview_mtp_sync("no-such-folder", "Example Android", "Internal storage", "Music/Proplaylist", backend=FakeBackend([device]))
+        self.assertFalse(device.closed)
+
+    def test_preview_missing_phone_folder_marks_source_files_new(self):
+        device = FakeDevice("Example Android", "", ["Internal storage"])
+        with tempfile.TemporaryDirectory() as temp:
+            Path(temp, "track.mp3").write_bytes(b"music")
+            items = preview_mtp_sync(temp, "Example Android", "Internal storage", "Music/NotCreated", backend=FakeBackend([device]))
+        self.assertEqual([item.status for item in items], ["NEW"])
+        self.assertTrue(device.closed)
 
 
 if __name__ == "__main__":
