@@ -4,14 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "playlist2phone"
-version = "0.1.0"
-description = "Preview-first MP3 copying to USB mass-storage music devices"
+version = "0.2.0"
+description = "Preview-first music sync for Android phones over USB MTP"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+android = ["mtp==2.0.9"]
+
 [project.scripts]
 playlist2phone = "playlist2phone.cli:main"
+playlist2phone-devices = "playlist2phone.android:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

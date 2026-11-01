@@ -1,89 +1,90 @@
 # Spotify to Phone Sync
 
-A Windows-first project for maintaining a local music library and safely copying it to a connected phone or removable-storage music player.
+A Windows-first project for keeping a local MP3 library and safely syncing music to Android smartphones over USB using Media Transfer Protocol (MTP).
 
-## Current feature: safe MP3 folder sync
+## Android device detection (read-only milestone)
 
-The first implementation copies MP3 files from a master folder to an existing USB/SD destination. It is deliberately preview-first and copy-only.
+The first Android feature lists MTP devices visible to Windows and the storage roots exposed by each device. It does not browse personal files, upload music, create folders, or delete anything on the phone.
 
 ### Requirements
 
+- Windows 10 or Windows 11
 - Python 3.10 or newer
-- A destination folder that is already mounted and accessible
-- An existing marker file in the destination before applying changes
+- An Android phone connected by a USB data cable
+- The phone unlocked, with **File transfer (MTP)** selected in its USB options
 
 ### Install for development
 
-From the repository root:
+From the repository root, in PowerShell:
 
-```powershell
-py -m venv .venv
+~~~powershell
+py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-py -m pip install -e .
-```
+py -m pip install -e ".[android]"
+~~~
 
-### Preview (default)
+The optional Android extra installs mtp 2.0.9, a separate MIT-licensed package that wraps Windows Portable Devices (WPD) for MTP access. See https://github.com/Heribert17/mtp.
 
-```powershell
+### List connected MTP devices
+
+Connect and unlock the phone, select **File transfer**, then run:
+
+~~~powershell
+playlist2phone-devices
+~~~
+
+Or:
+
+~~~powershell
+py -m playlist2phone.android
+~~~
+
+This command is read-only. It reports device names and storage-root names only. Windows may show other portable MTP devices too; the output is not a cryptographic verification that a listed device is an Android phone.
+
+If no device appears, try another USB data cable/port, unlock the phone, select **File transfer (MTP)**, and run the command again.
+
+## Existing local-folder copy utility
+
+The project also contains a generic preview-first MP3 folder-copy engine. This is for ordinary filesystem paths and removable folders; **it does not yet copy directly to Android MTP storage**.
+
+Preview:
+
+~~~powershell
 playlist2phone --source "C:\Music\Master" --destination "E:\Music"
-```
+~~~
 
-Or without installing the command:
+Apply only after creating the marker file in the exact destination folder:
 
-```powershell
-py -m playlist2phone.cli --source "C:\Music\Master" --destination "E:\Music"
-```
-
-Preview does not write files. To apply changes, first create the marker file yourself in the exact destination folder:
-
-```powershell
+~~~powershell
 New-Item -ItemType File -Path "E:\Music\.playlist2phone-target"
-```
-
-Then explicitly apply:
-
-```powershell
 playlist2phone --source "C:\Music\Master" --destination "E:\Music" --apply
-```
+~~~
 
-The marker is a safety check, not a security boundary. Double-check the destination path before using `--apply`.
+The folder-copy utility copies new MP3s, skips identical files using SHA-256, updates changed files, and never deletes destination files. Android MTP transfer will be implemented separately after device detection is tested with a real phone.
 
-### Sync behaviour
+## Run tests
 
-- Copies new MP3 files and preserves subfolders.
-- Skips files whose content is already identical (SHA-256 comparison).
-- Replaces changed files.
-- Ignores non-MP3 files and source symlinks.
-- Never deletes files from the destination.
-- Requires an existing marker file for apply mode.
-- Rejects identical or nested source/destination folders.
-
-### Run tests
-
-```powershell
+~~~powershell
 py -m unittest discover -s tests -v
-```
+~~~
+
+The MTP discovery tests use a fake backend and do not require a physical Android phone. Real device detection still needs to be verified on Windows with an actual phone.
 
 ## Planned workflow
 
-1. Check a configured Spotify playlist.
-2. Obtain audio files through a separately configured, legally permitted source.
-3. Keep a master music folder on the computer.
-4. Detect a connected device and copy only new or changed files.
-5. Preview changes before applying them.
-
-## Device support status
-
-- USB mass-storage devices and SD cards: basic folder-copy engine implemented; automatic device detection is not implemented yet.
-- Android MTP: not implemented. MTP is not equivalent to a normal drive-letter device and needs a separate, tested backend.
-- Spotify playlist checking and audio acquisition: not implemented.
+1. Detect an Android phone over USB/MTP. (Read-only prototype.)
+2. Identify its available storage and let the user select a Music destination.
+3. Preview which MP3s are new, changed, or already identical.
+4. Copy only approved changes to the phone.
+5. Handle disconnect/reconnect safely; never delete phone files automatically.
+6. Separately check the configured Spotify playlist and maintain the computer's master music folder.
 
 ## Safety and privacy
 
 - The computer's master music folder is the source of truth.
-- Device files are never automatically deleted.
+- The Android detection command only reads device and storage names.
+- Device files must never be automatically deleted.
 - Never commit credentials, personal playlist URLs, local paths, logs, or private playlist data.
-- The marker file helps avoid selecting the wrong destination, but does not replace checking the path.
 
 ## Legal note
 
