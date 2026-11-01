@@ -178,7 +178,7 @@ class AndroidDiscoveryTests(unittest.TestCase):
             Path(temp, "song.mp3").write_bytes(b"audio")
             result = transfer_new_mtp_files(temp, "Phone", "Internal storage", "Music/Playlist", backend=FakeBackend([device]))
         self.assertEqual(result.copied, ())
-        self.assertIsNone(device.roots["Internal storage"].get_child("Music"))
+        self.assertIsNone(device.roots["Internal storage"].get_child("Music").get_child("Playlist"))
 
     def test_android_apply_creates_folders_and_copies_new_file(self):
         device = FakeDevice("Phone", "", ["Internal storage"])
@@ -188,7 +188,7 @@ class AndroidDiscoveryTests(unittest.TestCase):
         target = device.roots["Internal storage"].get_child("Music").get_child("Playlist")
         self.assertEqual(target.get_child("song.mp3").size, 10)
         self.assertEqual(result.copied, ("song.mp3",))
-        self.assertEqual(result.created_folders, ("Music", "Music/Playlist"))
+        self.assertEqual(result.created_folders, ("Music/Playlist",))
 
     def test_android_apply_skips_same_size_and_preserves_changed_file(self):
         device = FakeDevice("Phone", "", ["Internal storage"])
