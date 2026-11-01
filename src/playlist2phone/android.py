@@ -333,6 +333,7 @@ class MTPTransferResult:
     conflicts: tuple[str, ...]
     failed: tuple[str, ...]
     created_folders: tuple[str, ...]
+    pending: tuple[str, ...] = ()
 
 
 def _ensure_mtp_folder(parent: Any, name: str) -> tuple[Any, bool]:
@@ -353,7 +354,7 @@ def transfer_new_mtp_files(source, device_name, storage_name, relative_path, *, 
     if not apply:
         items = preview_mtp_sync(root, device_name, storage_name, relative_path, backend=backend)
         return MTPTransferResult((), tuple(x.relative_path for x in items if x.status == "SAME_SIZE_UNVERIFIED"),
-                                 tuple(x.relative_path for x in items if x.status == "SIZE_DIFFERS"), (), ())
+                                 tuple(x.relative_path for x in items if x.status == "SIZE_DIFFERS"), (), (), tuple(x.relative_path for x in items if x.status == "NEW"))
 
     target_parts = _validated_parts(relative_path)
     mtp_backend = backend if backend is not None else _load_windows_mtp_backend()
@@ -457,12 +458,12 @@ def transfer_main(argv=None):
         print(f"Android transfer failed: {exc}", file=sys.stderr)
         return 2
     mode = "TRANSFER" if args.apply else "DRY RUN"
-    print(f"{mode}: copied {len(result.copied)}, skipped {len(result.skipped)}, conflicts {len(result.conflicts)}, failed {len(result.failed)}")
+    print(f"{mode}: to copy {len(result.pending)}, copied {len(result.copied)}, skipped {len(result.skipped)}, conflicts {len(result.conflicts)}, failed {len(result.failed)}")
     if result.created_folders:
         print("Created folders:")
         for name in result.created_folders:
             print(f"  {name}")
-    for label, values in (("COPIED", result.copied), ("SKIPPED", result.skipped), ("CONFLICT", result.conflicts), ("FAILED", result.failed)):
+    for label, values in (("TO COPY", result.pending), ("COPIED", result.copied), ("SKIPPED", result.skipped), ("CONFLICT", result.conflicts), ("FAILED", result.failed)):
         for name in values:
             print(f"{label:9} {name}")
     print("Existing files are never overwritten; no phone files were deleted.")

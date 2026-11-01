@@ -19,7 +19,6 @@ playlist2phone-devices = "playlist2phone.android:main"
 playlist2phone-inspect = "playlist2phone.android:inspect_main"
 playlist2phone-android-preview = "playlist2phone.android:preview_main"
 playlist2phone-android-transfer = "playlist2phone.android:transfer_main"
-playlist2phone-android-transfer = "playlist2phone.android:transfer_main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
